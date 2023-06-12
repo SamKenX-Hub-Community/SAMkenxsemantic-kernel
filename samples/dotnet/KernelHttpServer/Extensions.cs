@@ -15,8 +15,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.CoreSkills;
-using Microsoft.SemanticKernel.KernelExtensions;
-using Microsoft.SemanticKernel.Orchestration;
 using Microsoft.SemanticKernel.SkillDefinition;
 using Microsoft.SemanticKernel.Skills.Document;
 using Microsoft.SemanticKernel.Skills.Document.FileSystem;
@@ -37,7 +35,7 @@ internal static class Extensions
         var apiConfig = new ApiKeyConfig();
 
         // completion values
-        if (req.Headers.TryGetValues(SKHttpHeaders.CompletionBackend, out var completionAIService))
+        if (req.Headers.TryGetValues(SKHttpHeaders.CompletionService, out var completionAIService))
         {
             apiConfig.CompletionConfig.AIService = Enum.Parse<AIService>(completionAIService.First());
         }
@@ -45,7 +43,7 @@ internal static class Extensions
         if (req.Headers.TryGetValues(SKHttpHeaders.CompletionModel, out var completionModelValue))
         {
             apiConfig.CompletionConfig.DeploymentOrModelId = completionModelValue.First();
-            apiConfig.CompletionConfig.Label = apiConfig.CompletionConfig.DeploymentOrModelId;
+            apiConfig.CompletionConfig.ServiceId = apiConfig.CompletionConfig.DeploymentOrModelId;
         }
 
         if (req.Headers.TryGetValues(SKHttpHeaders.CompletionEndpoint, out var completionEndpoint))
@@ -59,7 +57,7 @@ internal static class Extensions
         }
 
         // embedding values
-        if (req.Headers.TryGetValues(SKHttpHeaders.EmbeddingBackend, out var embeddingAIService))
+        if (req.Headers.TryGetValues(SKHttpHeaders.EmbeddingService, out var embeddingAIService))
         {
             apiConfig.EmbeddingConfig.AIService = Enum.Parse<AIService>(embeddingAIService.First());
         }
@@ -67,7 +65,7 @@ internal static class Extensions
         if (req.Headers.TryGetValues(SKHttpHeaders.EmbeddingModel, out var embeddingModelValue))
         {
             apiConfig.EmbeddingConfig.DeploymentOrModelId = embeddingModelValue.First();
-            apiConfig.EmbeddingConfig.Label = apiConfig.EmbeddingConfig.DeploymentOrModelId;
+            apiConfig.EmbeddingConfig.ServiceId = apiConfig.EmbeddingConfig.DeploymentOrModelId;
         }
 
         if (req.Headers.TryGetValues(SKHttpHeaders.EmbeddingEndpoint, out var embeddingEndpoint))
@@ -92,14 +90,12 @@ internal static class Extensions
 
     internal static ISKFunction GetFunction(this IReadOnlySkillCollection skills, string skillName, string functionName)
     {
-        return skills.HasNativeFunction(skillName, functionName)
-            ? skills.GetNativeFunction(skillName, functionName)
-            : skills.GetSemanticFunction(skillName, functionName);
+        return skills.GetFunction(skillName, functionName);
     }
 
     internal static bool HasSemanticOrNativeFunction(this IReadOnlySkillCollection skills, string skillName, string functionName)
     {
-        return skills.HasSemanticFunction(skillName, functionName) || skills.HasNativeFunction(skillName, functionName);
+        return skills.TryGetFunction(skillName, functionName, out _);
     }
 
     [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
@@ -134,12 +130,6 @@ internal static class Extensions
         }
     }
 
-    internal static void RegisterPlanner(this IKernel kernel)
-    {
-        PlannerSkill planner = new(kernel);
-        _ = kernel.ImportSkill(planner, nameof(PlannerSkill));
-    }
-
     internal static void RegisterTextMemory(this IKernel kernel)
     {
         _ = kernel.ImportSkill(new TextMemorySkill(), nameof(TextMemorySkill));
@@ -170,7 +160,7 @@ internal static class Extensions
         if (ShouldLoad(nameof(GitHubSkill), skillsToLoad))
         {
             var downloadSkill = new WebFileDownloadSkill();
-            GitHubSkill githubSkill = new GitHubSkill(kernel, downloadSkill);
+            GitHubSkill githubSkill = new(kernel, downloadSkill);
             _ = kernel.ImportSkill(githubSkill, nameof(GitHubSkill));
         }
     }
@@ -207,6 +197,6 @@ internal static class Extensions
 
     private static bool ShouldLoad(string skillName, IEnumerable<string>? skillsToLoad = null)
     {
-        return skillsToLoad?.Contains(skillName, StringComparer.InvariantCultureIgnoreCase) != false;
+        return skillsToLoad?.Contains(skillName, StringComparer.OrdinalIgnoreCase) != false;
     }
 }

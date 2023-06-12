@@ -49,11 +49,11 @@ const ServiceConfig: FC<IData> = ({ uri, onConfigComplete }) => {
             deploymentOrModelId: isOpenAI ? openAiModel : azureOpenAiDeployment,
             label: isOpenAI ? openAiModel : azureOpenAiDeployment,
             endpoint: isOpenAI ? '' : azureOpenAiEndpoint,
-            backend: isOpenAI ? 1 : 0
-        }
+            backend: isOpenAI ? 1 : 0,
+        };
 
         setKeyConfig((keyConfig) => ({ ...keyConfig }));
-    }, [isOpenAI, openAiKey, openAiModel, azureOpenAiKey, azureOpenAiDeployment, azureOpenAiEndpoint]);
+    }, [isOpenAI, openAiKey, openAiModel, azureOpenAiKey, azureOpenAiDeployment, azureOpenAiEndpoint, keyConfig]);
 
     return (
         <>
@@ -83,7 +83,10 @@ const ServiceConfig: FC<IData> = ({ uri, onConfigComplete }) => {
                         value={openAiKey}
                         onChange={(e, d) => {
                             setOpenAiKey(d.value);
-                            setKeyConfig({ ...keyConfig, completionConfig: { ...keyConfig.completionConfig, key: d.value } });
+                            setKeyConfig({
+                                ...keyConfig,
+                                completionConfig: { ...keyConfig.completionConfig, key: d.value },
+                            });
                         }}
                         placeholder="Enter your OpenAI key here"
                     />
@@ -93,7 +96,14 @@ const ServiceConfig: FC<IData> = ({ uri, onConfigComplete }) => {
                         value={openAiModel}
                         onChange={(e, d) => {
                             setOpenAiModel(d.value);
-                            setKeyConfig({ ...keyConfig, completionConfig: { ...keyConfig.completionConfig, deploymentOrModelId: d.value, label: d.value } });
+                            setKeyConfig({
+                                ...keyConfig,
+                                completionConfig: {
+                                    ...keyConfig.completionConfig,
+                                    deploymentOrModelId: d.value,
+                                    label: d.value,
+                                },
+                            });
                         }}
                         placeholder="Enter the model id here, ie: text-davinci-003"
                     />
@@ -107,19 +117,29 @@ const ServiceConfig: FC<IData> = ({ uri, onConfigComplete }) => {
                         value={azureOpenAiKey}
                         onChange={(e, d) => {
                             setAzureOpenAiKey(d.value);
-                            setKeyConfig({ ...keyConfig, completionConfig: { ...keyConfig.completionConfig, key: d.value } });
+                            setKeyConfig({
+                                ...keyConfig,
+                                completionConfig: { ...keyConfig.completionConfig, key: d.value },
+                            });
                         }}
                         placeholder="Enter your Azure OpenAI key here"
                     />
-                    <Label htmlFor="oaimodel">Model</Label>
+                    <Label htmlFor="oaimodel">Deployment</Label>
                     <Input
                         id="aoaideployment"
                         value={azureOpenAiDeployment}
                         onChange={(e, d) => {
                             setAzureOpenAiDeployment(d.value);
-                            setKeyConfig({ ...keyConfig, completionConfig: { ...keyConfig.completionConfig, deploymentOrModelId: d.value, label: d.value } });
+                            setKeyConfig({
+                                ...keyConfig,
+                                completionConfig: {
+                                    ...keyConfig.completionConfig,
+                                    deploymentOrModelId: d.value,
+                                    label: d.value,
+                                },
+                            });
                         }}
-                        placeholder="Enter your deployment id here, ie: my-deployment"
+                        placeholder="Enter your deployment name here, ie: my-deployment"
                     />
                     <Label htmlFor="oaiendpoint">Endpoint</Label>
                     <Input
@@ -127,7 +147,10 @@ const ServiceConfig: FC<IData> = ({ uri, onConfigComplete }) => {
                         value={azureOpenAiEndpoint}
                         onChange={(e, d) => {
                             setAzureOpenAiEndpoint(d.value);
-                            setKeyConfig({ ...keyConfig, completionConfig: { ...keyConfig.completionConfig, endpoint: d.value } });
+                            setKeyConfig({
+                                ...keyConfig,
+                                completionConfig: { ...keyConfig.completionConfig, endpoint: d.value },
+                            });
                         }}
                         placeholder="Enter the endpoint here, ie: https://my-resource.openai.azure.com"
                     />

@@ -18,22 +18,22 @@ internal static class SemanticKernelFactory
         HttpRequestData req,
         ILogger logger,
         IEnumerable<string>? skillsToLoad = null,
-        IMemoryStore<float>? memoryStore = null)
+        IMemoryStore? memoryStore = null)
     {
         var apiConfig = req.ToApiKeyConfig();
 
-        //must have a completion backend
+        // must have a completion service
         if (!apiConfig.CompletionConfig.IsValid())
         {
-            logger.LogError("Completion backend has not been supplied.");
+            logger.LogError("Text completion service has not been supplied");
             return null;
         }
 
-        //embedding backend is optional, don't fail if we were not given the config
+        // Text embedding service is optional, don't fail if we were not given the config
         if (memoryStore != null &&
             !apiConfig.EmbeddingConfig.IsValid())
         {
-            logger.LogWarning("Embedding backend has not been supplied.");
+            logger.LogWarning("Text embedding service has not been supplied");
         }
 
         KernelBuilder builder = Kernel.Builder;
@@ -41,36 +41,46 @@ internal static class SemanticKernelFactory
         return _CompleteKernelSetup(req, builder, logger, skillsToLoad);
     }
 
-    private static KernelBuilder _ConfigureKernelBuilder(ApiKeyConfig config, KernelBuilder builder, IMemoryStore<float>? memoryStore)
+    private static KernelBuilder _ConfigureKernelBuilder(ApiKeyConfig config, KernelBuilder builder, IMemoryStore? memoryStore)
     {
-        builder = builder
-            .Configure(c =>
+        switch (config.CompletionConfig.AIService)
+        {
+            case AIService.OpenAI:
+                builder.WithOpenAIChatCompletionService(
+                    modelId: config.CompletionConfig.DeploymentOrModelId,
+                    apiKey: config.CompletionConfig.Key);
+                break;
+            case AIService.AzureOpenAI:
+                builder.WithAzureChatCompletionService(
+                    deploymentName: config.CompletionConfig.DeploymentOrModelId,
+                    endpoint: config.CompletionConfig.Endpoint,
+                    apiKey: config.CompletionConfig.Key);
+                break;
+            default:
+                break;
+        }
+
+        if (memoryStore != null && config.EmbeddingConfig.IsValid())
+        {
+            switch (config.EmbeddingConfig.AIService)
             {
-                switch (config.CompletionConfig.AIService)
-                {
-                    case AIService.OpenAI:
-                        c.AddOpenAICompletionBackend(config.CompletionConfig.Label, config.CompletionConfig.DeploymentOrModelId, config.CompletionConfig.Key);
-                        break;
-                    case AIService.AzureOpenAI:
-                        c.AddAzureOpenAICompletionBackend(config.CompletionConfig.Label, config.CompletionConfig.DeploymentOrModelId, config.CompletionConfig.Endpoint, config.CompletionConfig.Key);
-                        break;
-                }
+                case AIService.OpenAI:
+                    builder.WithOpenAITextEmbeddingGenerationService(
+                        modelId: config.EmbeddingConfig.DeploymentOrModelId,
+                        apiKey: config.EmbeddingConfig.Key);
+                    break;
+                case AIService.AzureOpenAI:
+                    builder.WithAzureTextEmbeddingGenerationService(
+                        deploymentName: config.EmbeddingConfig.DeploymentOrModelId,
+                        endpoint: config.EmbeddingConfig.Endpoint,
+                        apiKey: config.EmbeddingConfig.Key);
+                    break;
+                default:
+                    break;
+            }
 
-                if (memoryStore != null && config.EmbeddingConfig.IsValid())
-                {
-                    switch (config.EmbeddingConfig.AIService)
-                    {
-                        case AIService.OpenAI:
-                            c.AddOpenAIEmbeddingsBackend(config.EmbeddingConfig.Label, config.EmbeddingConfig.DeploymentOrModelId, config.EmbeddingConfig.Key);
-                            break;
-                        case AIService.AzureOpenAI:
-                            c.AddAzureOpenAIEmbeddingsBackend(config.EmbeddingConfig.Label, config.EmbeddingConfig.DeploymentOrModelId, config.EmbeddingConfig.Endpoint, config.EmbeddingConfig.Key);
-                            break;
-                    }
-
-                    builder.WithMemoryStorage(memoryStore);
-                }
-            });
+            builder.WithMemoryStorage(memoryStore);
+        }
 
         return builder;
     }
@@ -81,17 +91,13 @@ internal static class SemanticKernelFactory
 
         kernel.RegisterSemanticSkills(RepoFiles.SampleSkillsPath(), logger, skillsToLoad);
         kernel.RegisterNativeSkills(skillsToLoad);
-        kernel.RegisterPlanner();
 
         if (req.Headers.TryGetValues(SKHttpHeaders.MSGraph, out var graphToken))
         {
             kernel.RegisterNativeGraphSkills(graphToken.First());
         }
 
-        if (kernel.Config.DefaultEmbeddingsBackend != null)
-        {
-            kernel.RegisterTextMemory();
-        }
+        kernel.RegisterTextMemory();
 
         return kernel;
     }

@@ -1,6 +1,8 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
+using System;
 using System.IO;
+using System.Text;
 using System.Threading.Tasks;
 using Microsoft.SemanticKernel.Orchestration;
 using Microsoft.SemanticKernel.SkillDefinition;
@@ -28,9 +30,10 @@ public class FileIOSkill
     /// <returns> File content </returns>
     [SKFunction("Read a file")]
     [SKFunctionInput(Description = "Source file")]
-    public Task<string?> ReadAsync(string path)
+    public async Task<string> ReadAsync(string path)
     {
-        return File.ReadAllTextAsync(path);
+        using var reader = File.OpenText(path);
+        return await reader.ReadToEndAsync().ConfigureAwait(false);
     }
 
     /// <summary>
@@ -46,8 +49,17 @@ public class FileIOSkill
     [SKFunction("Write a file")]
     [SKFunctionContextParameter(Name = "path", Description = "Destination file")]
     [SKFunctionContextParameter(Name = "content", Description = "File content")]
-    public Task WriteAsync(SKContext context)
+    public async Task WriteAsync(SKContext context)
     {
-        return File.WriteAllTextAsync(context["path"], context["content"]);
+        byte[] text = Encoding.UTF8.GetBytes(context["content"]);
+        string path = context["path"];
+        if (File.Exists(path) && File.GetAttributes(path).HasFlag(FileAttributes.ReadOnly))
+        {
+            // Most environments will throw this with OpenWrite, but running inside docker on Linux will not.
+            throw new UnauthorizedAccessException($"File is read-only: {path}");
+        }
+
+        using var writer = File.OpenWrite(path);
+        await writer.WriteAsync(text, 0, text.Length).ConfigureAwait(false);
     }
 }

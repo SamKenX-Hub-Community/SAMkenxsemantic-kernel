@@ -3,8 +3,8 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.SemanticKernel;
-using Microsoft.SemanticKernel.Orchestration;
 using Microsoft.SemanticKernel.SemanticFunctions;
+using Microsoft.SemanticKernel.SkillDefinition;
 
 namespace LoadPromptsFromCloud;
 
@@ -45,8 +45,8 @@ public static class SemanticKernelExtensions
             {
                 // Assuming this prompt will be used for completions, set some settings like the number of tokens
                 Completion = new PromptTemplateConfig.CompletionConfig { Temperature = 0.5, MaxTokens = 100, },
-                // A list of backend aliases that the consumer should provide when running this prompt
-                DefaultBackends = new List<string> { "text-davinci-003" }
+                // A list of service IDs that the consumer should provide when running this prompt
+                DefaultServices = new List<string> { "text-davinci-003" }
             };
 
             // Create template

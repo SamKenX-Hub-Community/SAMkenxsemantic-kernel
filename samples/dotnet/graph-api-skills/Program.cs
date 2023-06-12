@@ -12,13 +12,15 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
 using Microsoft.SemanticKernel;
-using Microsoft.SemanticKernel.KernelExtensions;
 using Microsoft.SemanticKernel.Orchestration;
+using Microsoft.SemanticKernel.SkillDefinition;
 using Microsoft.SemanticKernel.Skills.MsGraph;
 using Microsoft.SemanticKernel.Skills.MsGraph.Connectors;
 using Microsoft.SemanticKernel.Skills.MsGraph.Connectors.Client;
 using Microsoft.SemanticKernel.Skills.MsGraph.Connectors.CredentialManagers;
 using DayOfWeek = System.DayOfWeek;
+
+namespace MsGraphSkillsExample;
 
 /// <summary>
 /// The static plan below is meant to emulate a plan generated from the following request:
@@ -63,13 +65,25 @@ public sealed class Program
 
         MsGraphConfiguration graphApiConfiguration = candidateGraphApiConfig;
 
+        string? defaultCompletionServiceId = configuration["DefaultCompletionServiceId"];
+        if (string.IsNullOrWhiteSpace(defaultCompletionServiceId))
+        {
+            throw new InvalidOperationException("'DefaultCompletionServiceId' is not set in configuration.");
+        }
+
+        string? currentAssemblyDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+        if (string.IsNullOrWhiteSpace(currentAssemblyDirectory))
+        {
+            throw new InvalidOperationException("Unable to determine current assembly directory.");
+        }
+
         #endregion
 
         // Initialize the Graph API client with interactive authentication and local caching.
         // Note that LocalUserMSALCredentialManager is NOT safe for multi-user and cloud-service deployments.
         // TODO: Include sample code credential manager for multi-user and cloud service scenario.
         // TODO: the var is never used
-        LocalUserMSALCredentialManager credentialManager = new();
+        LocalUserMSALCredentialManager credentialManager = await LocalUserMSALCredentialManager.CreateAsync();
 
         // For more details on creating a Graph API client and choosing authentication provider see:
         //   https://learn.microsoft.com/graph/sdks/create-client
@@ -77,7 +91,7 @@ public sealed class Program
 
         // Add authentication handler.
         IList<DelegatingHandler> handlers = GraphClientFactory.CreateDefaultHandlers(
-            CreateAuthenticationProvider(new LocalUserMSALCredentialManager(), graphApiConfiguration));
+            CreateAuthenticationProvider(await LocalUserMSALCredentialManager.CreateAsync(), graphApiConfiguration));
 
         // Add logging handler to log Graph API requests and responses request IDs.
         using MsGraphClientLoggingHandler loggingHandler = new(logger);
@@ -93,52 +107,43 @@ public sealed class Program
         EmailSkill outlookSkill = new(new OutlookMailConnector(graphServiceClient), loggerFactory.CreateLogger<EmailSkill>());
 
         // Initialize the Semantic Kernel and and register connections with OpenAI/Azure OpenAI instances.
-        IKernel sk = Kernel.Builder.WithLogger(loggerFactory.CreateLogger<IKernel>()).Build();
+        KernelBuilder builder = Kernel.Builder
+            .WithLogger(loggerFactory.CreateLogger<IKernel>());
+
+        if (configuration.GetSection("AzureOpenAI:ServiceId").Value != null)
+        {
+            AzureOpenAIConfiguration? azureOpenAIConfiguration = configuration.GetSection("AzureOpenAI").Get<AzureOpenAIConfiguration>();
+            if (azureOpenAIConfiguration != null)
+            {
+                builder.WithAzureTextCompletionService(
+                        deploymentName: azureOpenAIConfiguration.DeploymentName,
+                        endpoint: azureOpenAIConfiguration.Endpoint,
+                        apiKey: azureOpenAIConfiguration.ApiKey,
+                        serviceId: azureOpenAIConfiguration.ServiceId,
+                        setAsDefault: azureOpenAIConfiguration.ServiceId == defaultCompletionServiceId);
+            }
+        }
+
+        if (configuration.GetSection("OpenAI:ServiceId").Value != null)
+        {
+            OpenAIConfiguration? openAIConfiguration = configuration.GetSection("OpenAI").Get<OpenAIConfiguration>();
+            if (openAIConfiguration != null)
+            {
+                builder.WithOpenAITextCompletionService(
+                    modelId: openAIConfiguration.ModelId,
+                    apiKey: openAIConfiguration.ApiKey,
+                    serviceId: openAIConfiguration.ServiceId,
+                    setAsDefault: openAIConfiguration.ServiceId == defaultCompletionServiceId);
+            }
+        }
+
+        IKernel sk = builder.Build();
 
         var onedrive = sk.ImportSkill(oneDriveSkill, "onedrive");
         var todo = sk.ImportSkill(todoSkill, "todo");
         var outlook = sk.ImportSkill(outlookSkill, "outlook");
 
-        if (configuration.GetSection("AzureOpenAI:Label").Value != null)
-        {
-            AzureOpenAIConfiguration? azureOpenAIConfiguration = configuration.GetSection("AzureOpenAI").Get<AzureOpenAIConfiguration>();
-            if (azureOpenAIConfiguration != null)
-            {
-                sk.Config.AddAzureOpenAICompletionBackend(
-                    label: azureOpenAIConfiguration.Label,
-                    deploymentName: azureOpenAIConfiguration.DeploymentName,
-                    endpoint: azureOpenAIConfiguration.Endpoint,
-                    apiKey: azureOpenAIConfiguration.ApiKey);
-            }
-        }
-
-        if (configuration.GetSection("OpenAI:Label").Value != null)
-        {
-            OpenAIConfiguration? openAIConfiguration = configuration.GetSection("OpenAI").Get<OpenAIConfiguration>();
-            if (openAIConfiguration != null)
-            {
-                sk.Config.AddOpenAICompletionBackend(
-                    label: openAIConfiguration.Label,
-                    modelId: openAIConfiguration.ModelId,
-                    apiKey: openAIConfiguration.ApiKey);
-            }
-        }
-
-        string? defaultCompletionBackendLabel = configuration["DefaultCompletionBackendLabel"];
-        if (string.IsNullOrWhiteSpace(defaultCompletionBackendLabel))
-        {
-            throw new InvalidOperationException("'DefaultCompletionBackendLabel' is not set in configuration.");
-        }
-
-        sk.Config.SetDefaultCompletionBackend(defaultCompletionBackendLabel);
-
-        string? currentAssemblyDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-        if (string.IsNullOrWhiteSpace(currentAssemblyDirectory))
-        {
-            throw new InvalidOperationException("Unable to determine current assembly directory.");
-        }
-
-        string skillParentDirectory = Path.GetFullPath(Path.Combine(currentAssemblyDirectory, "../../../../skills"));
+        string skillParentDirectory = RepoFiles.SampleSkillsPath();
 
         IDictionary<string, ISKFunction> summarizeSkills =
             sk.ImportSemanticSkillFromDirectory(skillParentDirectory, "SummarizeSkill");

@@ -11,7 +11,6 @@ dotnet/.config
 *.user
 *.userosscache
 *.sln.docstates
-nuget.config
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
@@ -408,12 +407,14 @@ FodyWeavers.xsd
 *.cer
 *.crt
 *.key
+*.pem
 
 .env
+certs/
 launchSettings.json
-appsettings.development.json
-testsettings.development.json
 config.development.yaml
+*.development.config
+*.development.json
 .DS_Store
 .idea/
 node_modules/
@@ -446,3 +447,29 @@ _site
 # Yarn
 .yarn
 .yarnrc.yml
+
+# Python Environments
+.env
+.venv
+.myenv
+env/
+venv/
+myvenv/
+ENV/
+
+# Python dist
+dist/
+
+# Peristant storage
+data/qdrant
+data/chatstore*
+
+# Java build
+java/**/target
+java/.mvn/wrapper/maven-wrapper.jar
+
+# Java settings
+conf.properties
+
+# Playwright
+playwright-report/
